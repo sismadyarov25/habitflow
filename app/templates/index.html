@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} — Привычки, задачи и продуктивность</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Боковая навигация -->
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="brand-logo">HF</div>
+                <div>
+                    <div class="brand-name">{{ app_name }}</div>
+                    <div class="brand-tag">Фокус и система</div>
+                </div>
+            </div>
+
+            <nav class="nav-menu" aria-label="Основная навигация">
+                <button class="nav-item active" data-view="dashboard">
+                    <span class="nav-icon">☀️</span>
+                    <span>Сегодня</span>
+                </button>
+                <button class="nav-item" data-view="habits">
+                    <span class="nav-icon">🔥</span>
+                    <span>Привычки</span>
+                </button>
+                <button class="nav-item" data-view="calendar">
+                    <span class="nav-icon">📅</span>
+                    <span>Календарь</span>
+                </button>
+                <button class="nav-item" data-view="tasks">
+                    <span class="nav-icon">✅</span>
+                    <span>Задачи</span>
+                </button>
+                <button class="nav-item" data-view="stats">
+                    <span class="nav-icon">📊</span>
+                    <span>Статистика</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="plan-card">
+                    <div class="plan-badge">Тариф Free</div>
+                    <p class="plan-text">Нужна глубокая аналитика, годовая карта и PDF-отчёты?</p>
+                    <button class="btn btn-pro btn-full" id="openProModalBtn">
+                        ✨ HabitFlow Pro
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Основной контент -->
+        <main class="main-content">
+            <!-- Верхняя панель -->
+            <header class="topbar">
+                <div>
+                    <h1 class="page-title" id="pageTitle">Фокус на сегодня</h1>
+                    <p class="page-subtitle" id="currentDateLabel">Загрузка даты...</p>
+                </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-ghost" id="seedDemoBtn" title="Заполнить примерами привычек и задач">
+                        ⚡ Демо-данные
+                    </button>
+                    <button class="btn btn-secondary" id="quickAddHabitBtn">
+                        + Привычка
+                    </button>
+                    <button class="btn btn-primary" id="quickAddTaskBtn">
+                        + Задача
+                    </button>
+                </div>
+            </header>
+
+            <!-- РАЗДЕЛ 1: ГЛАВНАЯ ПАНЕЛЬ (СЕГОДНЯ) -->
+            <section class="view-section active" id="view-dashboard">
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-label">Привычки сегодня</span>
+                            <span class="kpi-icon">🔥</span>
+                        </div>
+                        <div class="kpi-value" id="kpiHabitsToday">0 / 0</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="kpiHabitsProgressBar" style="width: 0%"></div>
+                        </div>
+                        <div class="kpi-foot" id="kpiHabitsPercent">0% выполнено за день</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-label">Лучшая активная серия</span>
+                            <span class="kpi-icon">⚡</span>
+                        </div>
+                        <div class="kpi-value" id="kpiMaxStreak">0 дн.</div>
+                        <div class="kpi-foot">Непрерывное выполнение</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-label">Задачи на фокусе</span>
+                            <span class="kpi-icon">🎯</span>
+                        </div>
+                        <div class="kpi-value" id="kpiTasksFocus">0</div>
+                        <div class="kpi-foot" id="kpiTasksOverdueFoot">Просрочено: 0</div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <span class="kpi-label">Индекс продуктивности</span>
+                            <span class="kpi-icon">📈</span>
+                        </div>
+                        <div class="kpi-value" id="kpiProductivityScore">0 / 100</div>
+                        <div class="kpi-foot">Баланс привычек и задач (7 дн.)</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-columns">
+                    <!-- Колонка привычек на сегодня -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title">Чек-лист привычек на сегодня</h2>
+                                <p class="panel-subtitle">Отмечайте выполнение одним нажатием</p>
+                            </div>
+                            <button class="btn btn-sm btn-secondary" data-open-habit-modal>+ Добавить</button>
+                        </div>
+                        <div id="dashboardHabitsList" class="item-list"></div>
+                    </div>
+
+                    <!-- Колонка задач на сегодня и просроченных -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title">Задачи дня и дедлайны</h2>
+                                <p class="panel-subtitle">Сначала закрывайте задачи с высоким приоритетом</p>
+                            </div>
+                            <button class="btn btn-sm btn-primary" data-open-task-modal>+ Добавить</button>
+                        </div>
+                        <div id="dashboardOverdueBlock" class="overdue-banner hidden"></div>
+                        <div id="dashboardTasksList" class="item-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- РАЗДЕЛ 2: ПРИВЫЧКИ -->
+            <section class="view-section" id="view-habits">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2 class="panel-title">Мои привычки и серии</h2>
+                            <p class="panel-subtitle">Регулярные действия, которые формируют вашу систему</p>
+                        </div>
+                        <button class="btn btn-primary" data-open-habit-modal>+ Новая привычка</button>
+                    </div>
+                    <div id="habitsFullList" class="habits-cards-grid"></div>
+                </div>
+            </section>
+
+            <!-- РАЗДЕЛ 3: КАЛЕНДАРЬ ПРИВЫЧЕК ЗА МЕСЯЦ -->
+            <section class="view-section" id="view-calendar">
+                <div class="panel">
+                    <div class="panel-header calendar-header">
+                        <div>
+                            <h2 class="panel-title" id="calendarMonthTitle">Календарь привычек</h2>
+                            <p class="panel-subtitle" id="calendarMonthSummary">Нажмите на ячейку дня, чтобы отметить или снять выполнение</p>
+                        </div>
+                        <div class="calendar-controls">
+                            <button class="btn btn-secondary btn-sm" id="calPrevMonthBtn">← Пред.</button>
+                            <button class="btn btn-ghost btn-sm" id="calCurrentMonthBtn">Сегодня</button>
+                            <button class="btn btn-secondary btn-sm" id="calNextMonthBtn">След. →</button>
+                        </div>
+                    </div>
+
+                    <!-- Тепловая сетка месяца -->
+                    <div class="calendar-heatmap-wrap">
+                        <div class="weekdays-row">
+                            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+                        </div>
+                        <div class="calendar-grid" id="monthlyHeatmapGrid"></div>
+                    </div>
+
+                    <!-- Матрица привычек по дням месяца -->
+                    <div class="matrix-section">
+                        <h3 class="subsection-title">Поденная таблица отметки привычек</h3>
+                        <div class="table-responsive" id="habitMonthMatrix"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- РАЗДЕЛ 4: ЗАДАЧИ -->
+            <section class="view-section" id="view-tasks">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2 class="panel-title">Планировщик задач</h2>
+                            <p class="panel-subtitle">Управляйте приоритетами, статусами и сроками</p>
+                        </div>
+                        <div class="filters-bar">
+                            <select id="filterTaskStatus" class="input-select">
+                                <option value="">Все статусы</option>
+                                <option value="todo">К выполнению</option>
+                                <option value="in_progress">В работе</option>
+                                <option value="done">Выполнено</option>
+                            </select>
+                            <select id="filterTaskPriority" class="input-select">
+                                <option value="">Все приоритеты</option>
+                                <option value="high">Высокий приоритет</option>
+                                <option value="medium">Средний приоритет</option>
+                                <option value="low">Низкий приоритет</option>
+                            </select>
+                            <button class="btn btn-primary" data-open-task-modal>+ Новая задача</button>
+                        </div>
+                    </div>
+                    <div id="tasksFullList" class="item-list"></div>
+                </div>
+            </section>
+
+            <!-- РАЗДЕЛ 5: СТАТИСТИКА ЗА НЕДЕЛЮ И МЕСЯЦ -->
+            <section class="view-section" id="view-stats">
+                <div class="stats-toolbar">
+                    <div class="segmented-control">
+                        <button class="segment-btn active" data-stats-period="weekly">За 7 дней (Неделя)</button>
+                        <button class="segment-btn" data-stats-period="monthly">За 30 дней (Месяц)</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid" id="statsKpiGrid"></div>
+
+                <div class="dashboard-columns">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title" id="trendChartTitle">Динамика выполнения по дням</h2>
+                                <p class="panel-subtitle">Процент выполненных привычек в каждый день периода</p>
+                            </div>
+                        </div>
+                        <div id="dailyTrendChart" class="trend-chart"></div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title">Рейтинг серий и структура задач</h2>
+                                <p class="panel-subtitle">Какие привычки держатся лучше всего</p>
+                            </div>
+                        </div>
+                        <div id="streaksLeaderboard" class="item-list"></div>
+                        <hr class="divider">
+                        <div id="tasksBreakdownBox" class="breakdown-box"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: СОЗДАНИЕ / РЕДАКТИРОВАНИЕ ПРИВЫЧКИ -->
+    <div class="modal-backdrop hidden" id="habitModal">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="habitModalTitle">
+            <div class="modal-header">
+                <h3 id="habitModalTitle">Новая привычка</h3>
+                <button class="modal-close" data-close-modals aria-label="Закрыть">✕</button>
+            </div>
+            <form id="habitForm" novalidate>
+                <input type="hidden" id="habitIdInput">
+                <div class="form-group">
+                    <label for="habitNameInput">Название привычки *</label>
+                    <input type="text" id="habitNameInput" class="form-input" placeholder="Например: Читать 20 минут перед сном" required maxlength="120">
+                </div>
+                <div class="form-group">
+                    <label for="habitDescInput">Описание / триггер (необязательно)</label>
+                    <input type="text" id="habitDescInput" class="form-input" placeholder="После утреннего кофе открываю книгу" maxlength="500">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="habitIconInput">Иконка</label>
+                        <select id="habitIconInput" class="form-input">
+                            <option value="✨">✨ Фокус</option>
+                            <option value="📚">📚 Чтение</option>
+                            <option value="🏃">🏃 Спорт</option>
+                            <option value="💧">💧 Вода</option>
+                            <option value="🧘">🧘 Медитация</option>
+                            <option value="🌍">🌍 Языки</option>
+                            <option value="💻">💻 Код / Учёба</option>
+                            <option value="💤">💤 Сон</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="habitColorInput">Цвет акцента</label>
+                        <select id="habitColorInput" class="form-input">
+                            <option value="#4F46E5">Индиго (#4F46E5)</option>
+                            <option value="#10B981">Изумрудный (#10B981)</option>
+                            <option value="#F59E0B">Янтарный (#F59E0B)</option>
+                            <option value="#EC4899">Розовый (#EC4899)</option>
+                            <option value="#0EA5E9">Небесный (#0EA5E9)</option>
+                            <option value="#8B5CF6">Фиолетовый (#8B5CF6)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="habitTargetInput">Цель (дней в нед.)</label>
+                        <input type="number" id="habitTargetInput" class="form-input" min="1" max="7" value="7" required>
+                    </div>
+                </div>
+                <div class="form-error hidden" id="habitFormError"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" data-close-modals>Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="habitSubmitBtn">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: СОЗДАНИЕ / РЕДАКТИРОВАНИЕ ЗАДАЧИ -->
+    <div class="modal-backdrop hidden" id="taskModal">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="taskModalTitle">
+            <div class="modal-header">
+                <h3 id="taskModalTitle">Новая задача</h3>
+                <button class="modal-close" data-close-modals aria-label="Закрыть">✕</button>
+            </div>
+            <form id="taskForm" novalidate>
+                <input type="hidden" id="taskIdInput">
+                <div class="form-group">
+                    <label for="taskTitleInput">Что нужно сделать? *</label>
+                    <input type="text" id="taskTitleInput" class="form-input" placeholder="Например: Сдать лабораторную работу по Python" required maxlength="200">
+                </div>
+                <div class="form-group">
+                    <label for="taskDescInput">Заметки / детали</label>
+                    <textarea id="taskDescInput" class="form-input" rows="2" placeholder="Ссылки, чек-лист или критерии готовности" maxlength="1000"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskDueDateInput">Дедлайн</label>
+                        <input type="date" id="taskDueDateInput" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskPriorityInput">Приоритет</label>
+                        <select id="taskPriorityInput" class="form-input">
+                            <option value="high">🔴 Высокий</option>
+                            <option value="medium" selected>🟡 Средний</option>
+                            <option value="low">🟢 Низкий</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskStatusInput">Статус</label>
+                        <select id="taskStatusInput" class="form-input">
+                            <option value="todo" selected>К выполнению</option>
+                            <option value="in_progress">В работе</option>
+                            <option value="done">Выполнено</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="taskCategoryInput">Категория</label>
+                    <input type="text" id="taskCategoryInput" class="form-input" value="Общее" maxlength="50">
+                </div>
+                <div class="form-error hidden" id="taskFormError"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-ghost" data-close-modals>Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="taskSubmitBtn">Сохранить задачу</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: HABITFLOW PRO (ПРОВЕРКА СПРОСА НА ПОДПИСКУ) -->
+    <div class="modal-backdrop hidden" id="proModal">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="proModalTitle">
+            <div class="modal-header">
+                <h3 id="proModalTitle">✨ HabitFlow Pro — Ранний доступ</h3>
+                <button class="modal-close" data-close-modals aria-label="Закрыть">✕</button>
+            </div>
+            <div class="pro-modal-body">
+                <p class="pro-intro">
+                    Мы готовим платный тариф <strong>HabitFlow Pro (299 ₽ / мес)</strong> для тех, кто хочет максимум аналитики и синхронизацию между устройствами.
+                </p>
+                <ul class="pro-features-list">
+                    <li>📈 <strong>Корреляционная аналитика:</strong> как загрузка по задачам влияет на срывы привычек.</li>
+                    <li>🗓️ <strong>Годовая тепловая карта (365 дней)</strong> и безлимитная история.</li>
+                    <li>📩 <strong>Персональные еженедельные отчёты</strong> в Telegram или на Email.</li>
+                    <li>☁️ <strong>Облачная синхронизация</strong> между ноутбуком и телефоном.</li>
+                </ul>
+                <form id="proWaitlistForm" novalidate>
+                    <div class="form-group">
+                        <label for="proContactInput">Ваш Telegram (@username) или Email *</label>
+                        <input type="text" id="proContactInput" class="form-input" placeholder="@username или name@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="proFeatureSelect">Какая функция для вас самая ценная?</label>
+                        <select id="proFeatureSelect" class="form-input">
+                            <option value="Облачная синхронизация">Облачная синхронизация (телефон + ПК)</option>
+                            <option value="Персональные отчёты в Telegram">Персональные отчёты и напоминания в Telegram</option>
+                            <option value="Глубокая аналитика и годовая карта">Глубокая аналитика и годовая карта</option>
+                        </select>
+                    </div>
+                    <div class="form-error hidden" id="proFormError"></div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-ghost" data-close-modals>Позже</button>
+                        <button type="submit" class="btn btn-pro">Получить скидку 50% на запуск</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Всплывающие уведомления -->
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
