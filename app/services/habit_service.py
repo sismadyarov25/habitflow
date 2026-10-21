@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_owner_today
 from app.models.habit import Habit, HabitLog
 from app.schemas.habit import (
     HabitCreate,
@@ -28,7 +29,7 @@ def calculate_streaks(
       OR on `reference_date - 1 day` (yesterday). Otherwise it is 0.
     - `best_streak` is the longest consecutive daily sequence across all recorded dates.
     """
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     unique_dates: Set[date] = {d for d in completed_dates if d <= ref}
     if not unique_dates:
         return 0, 0
@@ -68,7 +69,7 @@ def serialize_habit_with_stats(
     reference_date: Optional[date] = None,
 ) -> HabitWithStatsResponse:
     """Convert a Habit ORM instance into HabitWithStatsResponse with calculated streaks."""
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     all_dates = [log.completed_date for log in habit.logs]
     current_streak, best_streak = calculate_streaks(all_dates, reference_date=ref)
     recent_cutoff = ref - timedelta(days=30)
@@ -169,7 +170,7 @@ def create_habit_checkin_strict(
     Raises 409 Conflict if the habit is already marked as completed on that date.
     """
     habit = get_habit_or_404(db, habit_id)
-    if completed_date > date.today() + timedelta(days=1):
+    if completed_date > get_owner_today() + timedelta(days=1):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Нельзя отмечать выполнение привычки на будущие даты",
@@ -216,7 +217,7 @@ def toggle_habit_checkin(
 ) -> HabitToggleResponse:
     """Idempotent toggle for a habit completion on a given date (check / uncheck)."""
     habit = get_habit_or_404(db, habit_id)
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     if completed_date > ref:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -5,11 +5,16 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.auth import require_owner_api
 from app.database import get_db
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 from app.services import task_service
 
-router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
+router = APIRouter(
+    prefix="/api/tasks",
+    tags=["Tasks"],
+    dependencies=[Depends(require_owner_api)],
+)
 
 
 @router.get("", response_model=List[TaskResponse])

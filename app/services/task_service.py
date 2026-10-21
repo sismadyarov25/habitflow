@@ -6,13 +6,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import case
 from sqlalchemy.orm import Session
 
+from app.config import get_owner_today
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 
 
 def serialize_task(task: Task, reference_date: Optional[date] = None) -> TaskResponse:
     """Serialize Task ORM object to TaskResponse with computed overdue flag."""
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     is_overdue = bool(
         task.due_date is not None
         and task.due_date < ref

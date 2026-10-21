@@ -1,17 +1,29 @@
 /**
- * HabitFlow Frontend Controller (Vanilla JS + FastAPI REST API)
+ * HabitFlow Frontend Controller (Single-Owner Authenticated + Multi-Device Sync)
  */
+
+function getMetaContent(name) {
+    const el = document.querySelector(`meta[name="${name}"]`);
+    return el ? el.getAttribute('content') || '' : '';
+}
+
+function getOwnerTodayIso() {
+    return getMetaContent('owner-today') || new Date().toISOString().slice(0, 10);
+}
+
+const initialDateParts = getOwnerTodayIso().split('-').map(Number);
 
 const state = {
     activeView: 'dashboard',
     habits: [],
     tasks: [],
     dashboard: null,
-    calendarYear: new Date().getFullYear(),
-    calendarMonth: new Date().getMonth() + 1,
+    calendarYear: initialDateParts[0] || new Date().getFullYear(),
+    calendarMonth: initialDateParts[1] || (new Date().getMonth() + 1),
     calendarData: null,
     statsSummary: null,
     statsPeriod: 'weekly',
+    csrfToken: getMetaContent('csrf-token'),
 };
 
 const VIEW_TITLES = {
@@ -53,19 +65,30 @@ function showToast(message, isError = false) {
     container.appendChild(toast);
     setTimeout(() => {
         toast.remove();
-    }, 3400);
+    }, 3200);
 }
 
 async function apiRequest(url, options = {}) {
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+    };
+    if (state.csrfToken) {
+        headers['X-CSRF-Token'] = state.csrfToken;
+    }
+
     const config = {
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {}),
-        },
+        credentials: 'same-origin',
         ...options,
+        headers,
     };
 
     const response = await fetch(url, config);
+    if (response.status === 401) {
+        window.location.href = '/login';
+        throw new Error('Сессия истекла. Выполняется переход на страницу входа...');
+    }
+
     if (response.status === 204) {
         return null;
     }
@@ -85,8 +108,10 @@ async function apiRequest(url, options = {}) {
 }
 
 function formatCurrentDateHeader() {
-    const now = new Date();
-    const formatted = now.toLocaleDateString('ru-RU', {
+    const iso = getOwnerTodayIso();
+    const [y, m, d] = iso.split('-').map(Number);
+    const dateObj = (y && m && d) ? new Date(y, m - 1, d) : new Date();
+    const formatted = dateObj.toLocaleDateString('ru-RU', {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -98,10 +123,19 @@ function formatCurrentDateHeader() {
     }
 }
 
+async function handleLogout() {
+    try {
+        await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch (_) {
+        // Redirect even if network hiccups
+    }
+    window.location.href = '/login';
+}
+
 /* ======================== НАВИГАЦИЯ ======================== */
 function switchView(viewName) {
     state.activeView = viewName;
-    document.querySelectorAll('.nav-item').forEach((btn) => {
+    document.querySelectorAll('.nav-item, .mobile-nav-btn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.view === viewName);
     });
     document.querySelectorAll('.view-section').forEach((sec) => {
@@ -214,7 +248,7 @@ function renderTaskRowHtml(task) {
                 </button>
                 <div class="item-info">
                     <div class="item-title">
-                        <span>${escapeHtml(task.title)}</span>
+                        <span class="item-title-text">${escapeHtml(task.title)}</span>
                         <span class="badge badge-${task.priority}">${PRIORITY_LABELS[task.priority] || task.priority}</span>
                         <span class="badge badge-status">${STATUS_LABELS[task.status] || task.status}</span>
                         ${dueBadge}
@@ -223,8 +257,8 @@ function renderTaskRowHtml(task) {
                 </div>
             </div>
             <div class="icon-actions">
-                <button class="icon-btn" onclick="openEditTaskModal(${task.id})" title="Редактировать">✎</button>
-                <button class="icon-btn danger" onclick="handleDeleteTask(${task.id})" title="Удалить">🗑</button>
+                <button class="icon-btn" onclick="openEditTaskModal(${task.id})" title="Редактировать" aria-label="Редактировать">✎</button>
+                <button class="icon-btn danger" onclick="handleDeleteTask(${task.id})" title="Удалить" aria-label="Удалить">🗑</button>
             </div>
         </div>
     `;
@@ -248,7 +282,7 @@ function renderHabitsSection(habits) {
         return;
     }
 
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = getOwnerTodayIso();
 
     container.innerHTML = habits.map((h) => `
         <div class="habit-card" style="border-top-color: ${escapeHtml(h.color)}">
@@ -284,8 +318,8 @@ function renderHabitsSection(habits) {
                     ${h.completed_today ? '✓ Выполнено сегодня' : 'Отметить сегодня'}
                 </button>
                 <div class="icon-actions">
-                    <button class="icon-btn" onclick="openEditHabitModal(${h.id})" title="Редактировать">✎</button>
-                    <button class="icon-btn danger" onclick="handleDeleteHabit(${h.id})" title="Удалить">🗑</button>
+                    <button class="icon-btn" onclick="openEditHabitModal(${h.id})" title="Редактировать" aria-label="Редактировать">✎</button>
+                    <button class="icon-btn danger" onclick="handleDeleteHabit(${h.id})" title="Удалить" aria-label="Удалить">🗑</button>
                 </div>
             </div>
         </div>
@@ -345,7 +379,6 @@ function renderCalendar(data) {
     const grid = document.getElementById('monthlyHeatmapGrid');
     const cells = [];
 
-    // Пустые ячейки до первого дня месяца (Пн = 0 ... Вс = 6)
     for (let i = 0; i < data.first_weekday; i++) {
         cells.push(`<div class="cal-day-cell empty"></div>`);
     }
@@ -353,17 +386,16 @@ function renderCalendar(data) {
     for (const day of data.days) {
         const heatClass = getHeatClass(day.completion_rate);
         cells.push(`
-            <div class="cal-day-cell ${heatClass} ${day.is_today ? 'today' : ''}">
+            <div class="cal-day-cell ${heatClass} ${day.is_today ? 'today' : ''}" title="${day.date}: ${day.completed_count}/${day.total_active_habits} (${day.completion_rate}%)">
                 <div class="cal-day-num">${day.day_number}</div>
                 <div class="cal-day-meta">
-                    ${day.total_active_habits > 0 ? `${day.completed_count}/${day.total_active_habits} (${day.completion_rate}%)` : '—'}
+                    ${day.total_active_habits > 0 ? `<span class="cal-ratio">${day.completed_count}/${day.total_active_habits}</span><span class="cal-pct"> (${day.completion_rate}%)</span>` : '—'}
                 </div>
             </div>
         `);
     }
     grid.innerHTML = cells.join('');
 
-    // Матрица привычек по дням месяца
     const matrixBox = document.getElementById('habitMonthMatrix');
     if (!data.habits.length) {
         matrixBox.innerHTML = `<div class="empty-state">Добавьте привычки, чтобы отмечать их в календаре месяца.</div>`;
@@ -516,7 +548,6 @@ function renderStats(summary) {
         </div>
     `;
 
-    // График по дням
     const chart = document.getElementById('dailyTrendChart');
     chart.innerHTML = periodData.daily_trend.map((pt) => `
         <div class="trend-col" title="${pt.date}: ${pt.habits_completed}/${pt.habits_total} привычек (${pt.habit_rate}%), задач закрыто: ${pt.tasks_completed}">
@@ -527,7 +558,6 @@ function renderStats(summary) {
         </div>
     `).join('');
 
-    // Лидерборд серий
     const leaderboard = document.getElementById('streaksLeaderboard');
     if (!summary.top_streaks.length) {
         leaderboard.innerHTML = `<div class="empty-state">Пока нет активных привычек.</div>`;
@@ -546,7 +576,6 @@ function renderStats(summary) {
         `).join('');
     }
 
-    // Разбивка задач
     const breakdown = document.getElementById('tasksBreakdownBox');
     breakdown.innerHTML = `
         <div class="subsection-title">Распределение всех задач</div>
@@ -602,7 +631,7 @@ async function openEditHabitModal(habitId) {
 function openCreateTaskModal() {
     document.getElementById('taskForm').reset();
     document.getElementById('taskIdInput').value = '';
-    document.getElementById('taskDueDateInput').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('taskDueDateInput').value = getOwnerTodayIso();
     document.getElementById('taskModalTitle').textContent = 'Новая задача';
     document.getElementById('taskModal').classList.remove('hidden');
 }
@@ -632,8 +661,8 @@ function refreshActiveView() {
 document.addEventListener('DOMContentLoaded', () => {
     formatCurrentDateHeader();
 
-    // Навигация по вкладкам
-    document.querySelectorAll('.nav-item').forEach((btn) => {
+    // Навигация по вкладкам (десктоп + мобильный таб-бар)
+    document.querySelectorAll('.nav-item, .mobile-nav-btn').forEach((btn) => {
         btn.addEventListener('click', () => switchView(btn.dataset.view));
     });
 
@@ -646,8 +675,35 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('proModal').classList.remove('hidden');
     });
 
-    // Закрытие модалок
+    // Закрытие модалок по кнопке и клику на фон
     document.querySelectorAll('[data-close-modals]').forEach((b) => b.addEventListener('click', closeAllModals));
+    document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) closeAllModals();
+        });
+    });
+
+    // Ручная и автоматическая синхронизация между ноутбуком и телефоном
+    const triggerSync = () => {
+        refreshActiveView();
+        showToast('Синхронизировано с сервером');
+    };
+    const syncBtn = document.getElementById('syncNowBtn');
+    const mobileSyncBtn = document.getElementById('mobileSyncBtn');
+    if (syncBtn) syncBtn.addEventListener('click', triggerSync);
+    if (mobileSyncBtn) mobileSyncBtn.addEventListener('click', triggerSync);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            refreshActiveView();
+        }
+    });
+
+    // Выход владельца
+    const desktopLogout = document.getElementById('desktopLogoutBtn');
+    const mobileLogout = document.getElementById('mobileLogoutBtn');
+    if (desktopLogout) desktopLogout.addEventListener('click', handleLogout);
+    if (mobileLogout) mobileLogout.addEventListener('click', handleLogout);
 
     // Демо-данные
     document.getElementById('seedDemoBtn').addEventListener('click', async () => {
@@ -758,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const contact = document.getElementById('proContactInput').value.trim();
         if (contact.length < 3) {
-            errBox.textContent = 'Укажите ваш Telegram (@username) или Email';
+            errBox.textContent = 'Укажите минимум 3 символа';
             errBox.classList.remove('hidden');
             return;
         }
@@ -799,9 +855,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('calCurrentMonthBtn').addEventListener('click', () => {
-        const now = new Date();
-        state.calendarYear = now.getFullYear();
-        state.calendarMonth = now.getMonth() + 1;
+        const parts = getOwnerTodayIso().split('-').map(Number);
+        state.calendarYear = parts[0] || new Date().getFullYear();
+        state.calendarMonth = parts[1] || (new Date().getMonth() + 1);
         loadCalendar();
     });
 

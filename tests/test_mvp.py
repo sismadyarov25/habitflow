@@ -1,14 +1,111 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from fastapi.testclient import TestClient
+
+from app.auth import hash_password, verify_password
+from app.config import get_owner_today, get_settings
+
+
+def test_unauthenticated_access_blocked(anon_client: TestClient):
+    """Verify anonymous visitors cannot read or modify private owner data."""
+    # Root page redirects to /login
+    res_root = anon_client.get("/", follow_redirects=False)
+    assert res_root.status_code == 302
+    assert res_root.headers["location"] == "/login"
+
+    # Login page is accessible
+    res_login = anon_client.get("/login")
+    assert res_login.status_code == 200
+    assert "Вход владельца" in res_login.text
+
+    # Health check remains public and lightweight
+    res_health = anon_client.get("/health")
+    assert res_health.status_code == 200
+    assert res_health.json()["status"] == "ok"
+
+    # Every private API endpoint rejects unauthenticated requests with 401
+    private_get_endpoints = [
+        "/api/habits",
+        "/api/tasks",
+        "/api/stats/dashboard",
+        "/api/stats/calendar",
+        "/api/stats/summary",
+        "/api/auth/me",
+    ]
+    for url in private_get_endpoints:
+        r = anon_client.get(url)
+        assert r.status_code == 401, f"Endpoint {url} should return 401, got {r.status_code}"
+
+    # Mutating endpoints also reject anonymous requests with 401
+    assert anon_client.post("/api/habits", json={"name": "Взлом"}).status_code == 401
+    assert anon_client.post("/api/tasks", json={"title": "Взлом"}).status_code == 401
+    assert anon_client.delete("/api/habits/1").status_code == 401
+
+
+def test_owner_login_csrf_and_logout_flow(anon_client: TestClient):
+    """Test wrong password rejection, successful login, CSRF enforcement, and logout."""
+    settings = get_settings()
+
+    # 1. Wrong password -> 401
+    bad_login = anon_client.post(
+        "/api/auth/login",
+        json={"username": settings.owner_username, "password": "wrong-password-123"},
+    )
+    assert bad_login.status_code == 401
+
+    # 2. Valid owner login -> 200 + HttpOnly cookie + csrf_token
+    ok_login = anon_client.post(
+        "/api/auth/login",
+        json={
+            "username": settings.owner_username,
+            "password": settings.owner_password or "habitflow-dev-pass",
+        },
+    )
+    assert ok_login.status_code == 200
+    data = ok_login.json()
+    assert data["authenticated"] is True
+    csrf_token = data["csrf_token"]
+    assert len(csrf_token) > 10
+
+    # 3. Authenticated GET works
+    me_res = anon_client.get("/api/auth/me")
+    assert me_res.status_code == 200
+    assert me_res.json()["owner"] == settings.owner_username
+
+    # 4. Mutating POST WITHOUT X-CSRF-Token is blocked with 403 Forbidden
+    no_csrf_post = anon_client.post("/api/habits", json={"name": "Без CSRF"})
+    assert no_csrf_post.status_code == 403
+
+    # 5. Mutating POST WITH valid X-CSRF-Token succeeds
+    with_csrf_post = anon_client.post(
+        "/api/habits",
+        json={"name": "С защитой CSRF"},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert with_csrf_post.status_code == 201
+
+    # 6. Logout clears session cookie and blocks subsequent requests
+    logout_res = anon_client.post("/api/auth/logout")
+    assert logout_res.status_code == 200
+    assert anon_client.get("/api/habits").status_code == 401
+
+
+def test_password_hash_verification():
+    """Verify PBKDF2-HMAC-SHA256 password hashing utility."""
+    raw = "MySuperSecretOwnerPass!2026"
+    hashed = hash_password(raw)
+    assert hashed.startswith("pbkdf2_sha256$")
+    assert verify_password(raw, hashed) is True
+    assert verify_password("WrongPassword", hashed) is False
 
 
 def test_index_and_health(client: TestClient):
-    """Verify HTML frontend and health endpoint respond with 200 OK."""
+    """Verify authenticated HTML frontend and health endpoint respond with 200 OK."""
     res_home = client.get("/")
     assert res_home.status_code == 200
     assert "HabitFlow" in res_home.text
+    assert 'name="csrf-token"' in res_home.text
 
     res_health = client.get("/health")
     assert res_health.status_code == 200
@@ -65,7 +162,7 @@ def test_prevent_duplicate_habit_checkin_on_same_date(client: TestClient):
     """Ensure a habit cannot have duplicate completion records for the same date."""
     h_res = client.post("/api/habits", json={"name": "Чтение 20 страниц"})
     habit_id = h_res.json()["id"]
-    today_str = date.today().isoformat()
+    today_str = get_owner_today().isoformat()
 
     # First strict check-in succeeds
     first = client.post(
@@ -90,7 +187,7 @@ def test_future_date_checkin_rejected(client: TestClient):
     """Ensure users cannot mark habits completed in the future."""
     h_res = client.post("/api/habits", json={"name": "Медитация"})
     habit_id = h_res.json()["id"]
-    future_date = (date.today() + timedelta(days=5)).isoformat()
+    future_date = (get_owner_today() + timedelta(days=5)).isoformat()
 
     res = client.post(
         f"/api/habits/{habit_id}/toggle",
@@ -103,10 +200,8 @@ def test_streak_calculation_and_toggle(client: TestClient):
     """Verify current_streak and best_streak calculation across consecutive and broken days."""
     h_res = client.post("/api/habits", json={"name": "Английский язык"})
     habit_id = h_res.json()["id"]
-    today = date.today()
+    today = get_owner_today()
 
-    # Log 3 consecutive days ending today (today, yesterday, 2 days ago)
-    # Plus an older 4-day streak separated by a gap
     older_streak_dates = [today - timedelta(days=d) for d in (10, 9, 8, 7)]
     current_streak_dates = [today - timedelta(days=d) for d in (2, 1, 0)]
 
@@ -135,10 +230,9 @@ def test_streak_calculation_and_toggle(client: TestClient):
 
 def test_task_crud_priorities_and_overdue(client: TestClient):
     """Test creating tasks, overdue detection, status transitions, and filtering."""
-    today = date.today()
+    today = get_owner_today()
     yesterday = (today - timedelta(days=1)).isoformat()
 
-    # Create overdue high-priority task
     t1 = client.post(
         "/api/tasks",
         json={
@@ -153,7 +247,6 @@ def test_task_crud_priorities_and_overdue(client: TestClient):
     assert t1_data["is_overdue"] is True
     assert t1_data["completed_at"] is None
 
-    # Mark task as done -> is_overdue becomes False and completed_at is populated
     done_res = client.patch(
         f"/api/tasks/{t1_data['id']}",
         json={"status": "done"},
@@ -164,7 +257,6 @@ def test_task_crud_priorities_and_overdue(client: TestClient):
     assert done_data["is_overdue"] is False
     assert done_data["completed_at"] is not None
 
-    # Filter tasks by status=done
     list_done = client.get("/api/tasks?status=done")
     assert list_done.status_code == 200
     assert len(list_done.json()) == 1
@@ -176,15 +268,13 @@ def test_monthly_calendar_and_analytics_summary(client: TestClient):
     assert seed_res.status_code == 200
     assert seed_res.json()["seeded"] is True
 
-    # Dashboard
     dash = client.get("/api/stats/dashboard")
     assert dash.status_code == 200
     dash_data = dash.json()
     assert dash_data["habits_total_today"] >= 4
     assert "productivity_score" in dash_data
 
-    # Monthly Calendar
-    today = date.today()
+    today = get_owner_today()
     cal = client.get(f"/api/stats/calendar?year={today.year}&month={today.month}")
     assert cal.status_code == 200
     cal_data = cal.json()
@@ -192,7 +282,6 @@ def test_monthly_calendar_and_analytics_summary(client: TestClient):
     assert cal_data["month"] == today.month
     assert len(cal_data["days"]) >= 28
 
-    # Weekly & Monthly Analytics
     summary = client.get("/api/stats/summary")
     assert summary.status_code == 200
     sum_data = summary.json()
@@ -211,7 +300,6 @@ def test_pro_waitlist_registration(client: TestClient):
     assert res1.status_code == 201
     assert res1.json()["contact"] == "@student_dev"
 
-    # Second submission with same contact updates gracefully without 500 error
     res2 = client.post(
         "/api/stats/waitlist",
         json={"contact": "@student_dev", "desired_feature": "PDF-отчёты"},

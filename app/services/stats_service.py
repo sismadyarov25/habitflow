@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_owner_today
 from app.models.habit import Habit, HabitLog
 from app.models.task import Task
 from app.models.waitlist import ProWaitlist
@@ -44,7 +45,7 @@ def get_monthly_calendar(
     reference_date: Optional[date] = None,
 ) -> MonthlyCalendarResponse:
     """Build a full monthly habit calendar with daily completion rates."""
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     first_weekday, days_in_month = calendar.monthrange(year, month)
     start_day = date(year, month, 1)
     end_day = date(year, month, days_in_month)
@@ -236,7 +237,7 @@ def get_analytics_summary(
     reference_date: Optional[date] = None,
 ) -> AnalyticsSummaryResponse:
     """Return comprehensive weekly (7d) and monthly (30d) productivity statistics."""
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     weekly = _build_period_stats(db, days_count=7, reference_date=ref)
     monthly = _build_period_stats(db, days_count=30, reference_date=ref)
 
@@ -279,7 +280,7 @@ def get_dashboard_data(
     reference_date: Optional[date] = None,
 ) -> DashboardResponse:
     """Aggregate today's habits, today's tasks, overdue tasks, and quick score for the main dashboard."""
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
     habits_today = list_habits(db, active_only=True, reference_date=ref)
     habits_total = len(habits_today)
     habits_done = sum(1 for h in habits_today if h.completed_today)
@@ -368,7 +369,7 @@ def register_pro_waitlist(
 
 def seed_demo_data(db: Session, reference_date: Optional[date] = None) -> dict:
     """Populate realistic demo habits, logs, and tasks if requested by the user."""
-    ref = reference_date or date.today()
+    ref = reference_date or get_owner_today()
 
     if db.query(Habit).count() > 0 or db.query(Task).count() > 0:
         return {"seeded": False, "message": "Данные уже существуют в базе"}

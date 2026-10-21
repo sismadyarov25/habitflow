@@ -2,8 +2,13 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ app_name }} — Привычки, задачи и продуктивность</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <meta name="owner-today" content="{{ owner_today }}">
+    <meta name="theme-color" content="#0F172A">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>{{ app_name }} — Личный трекер привычек и задач</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,13 +16,19 @@
 </head>
 <body>
     <div class="app-shell">
-        <!-- Боковая навигация -->
+        <!-- Боковая навигация (Ноутбук / Планшет) + Верхняя полоса на мобильном -->
         <aside class="sidebar" id="sidebar">
             <div class="brand">
-                <div class="brand-logo">HF</div>
-                <div>
-                    <div class="brand-name">{{ app_name }}</div>
-                    <div class="brand-tag">Фокус и система</div>
+                <div class="brand-left">
+                    <div class="brand-logo">HF</div>
+                    <div>
+                        <div class="brand-name">{{ app_name }}</div>
+                        <div class="brand-tag">🔒 {{ owner_username }} · {{ owner_timezone }}</div>
+                    </div>
+                </div>
+                <div class="mobile-header-actions">
+                    <button class="btn-icon-top" id="mobileSyncBtn" title="Синхронизировать с сервером" aria-label="Синхронизировать">🔄</button>
+                    <button class="btn-icon-top" id="mobileLogoutBtn" title="Выйти" aria-label="Выйти">🚪</button>
                 </div>
             </div>
 
@@ -46,10 +57,13 @@
 
             <div class="sidebar-footer">
                 <div class="plan-card">
-                    <div class="plan-badge">Тариф Free</div>
-                    <p class="plan-text">Нужна глубокая аналитика, годовая карта и PDF-отчёты?</p>
-                    <button class="btn btn-pro btn-full" id="openProModalBtn">
-                        ✨ HabitFlow Pro
+                    <div class="plan-badge">Личный сервер</div>
+                    <p class="plan-text">Единая база данных синхронизирована между ноутбуком и телефоном.</p>
+                    <button class="btn btn-pro btn-full" id="openProModalBtn" style="margin-bottom: 8px;">
+                        ✨ Идеи / Заметки Pro
+                    </button>
+                    <button class="btn btn-ghost btn-full sidebar-logout-btn" id="desktopLogoutBtn">
+                        🚪 Выйти ({{ owner_username }})
                     </button>
                 </div>
             </div>
@@ -59,12 +73,15 @@
         <main class="main-content">
             <!-- Верхняя панель -->
             <header class="topbar">
-                <div>
+                <div class="topbar-titles">
                     <h1 class="page-title" id="pageTitle">Фокус на сегодня</h1>
                     <p class="page-subtitle" id="currentDateLabel">Загрузка даты...</p>
                 </div>
                 <div class="topbar-actions">
-                    <button class="btn btn-ghost" id="seedDemoBtn" title="Заполнить примерами привычек и задач">
+                    <button class="btn btn-ghost btn-sm" id="syncNowBtn" title="Обновить данные с сервера">
+                        🔄 Синхр.
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="seedDemoBtn" title="Заполнить примерами привычек и задач">
                         ⚡ Демо-данные
                     </button>
                     <button class="btn btn-secondary" id="quickAddHabitBtn">
@@ -256,6 +273,30 @@
                 </div>
             </section>
         </main>
+
+        <!-- Фиксированная нижняя навигация для мобильных устройств (320px - 768px) -->
+        <nav class="mobile-bottom-nav" aria-label="Мобильная навигация">
+            <button class="mobile-nav-btn active" data-view="dashboard">
+                <span class="mobile-nav-icon">☀️</span>
+                <span class="mobile-nav-label">Сегодня</span>
+            </button>
+            <button class="mobile-nav-btn" data-view="habits">
+                <span class="mobile-nav-icon">🔥</span>
+                <span class="mobile-nav-label">Привычки</span>
+            </button>
+            <button class="mobile-nav-btn" data-view="calendar">
+                <span class="mobile-nav-icon">📅</span>
+                <span class="mobile-nav-label">Календарь</span>
+            </button>
+            <button class="mobile-nav-btn" data-view="tasks">
+                <span class="mobile-nav-icon">✅</span>
+                <span class="mobile-nav-label">Задачи</span>
+            </button>
+            <button class="mobile-nav-btn" data-view="stats">
+                <span class="mobile-nav-icon">📊</span>
+                <span class="mobile-nav-label">Отчёты</span>
+            </button>
+        </nav>
     </div>
 
     <!-- МОДАЛЬНОЕ ОКНО: СОЗДАНИЕ / РЕДАКТИРОВАНИЕ ПРИВЫЧКИ -->
@@ -366,30 +407,29 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО: HABITFLOW PRO (ПРОВЕРКА СПРОСА НА ПОДПИСКУ) -->
+    <!-- МОДАЛЬНОЕ ОКНО: HABITFLOW PRO / БЭКАЛОГ ФУНКЦИЙ -->
     <div class="modal-backdrop hidden" id="proModal">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="proModalTitle">
             <div class="modal-header">
-                <h3 id="proModalTitle">✨ HabitFlow Pro — Ранний доступ</h3>
+                <h3 id="proModalTitle">✨ HabitFlow Pro — Roadmap</h3>
                 <button class="modal-close" data-close-modals aria-label="Закрыть">✕</button>
             </div>
             <div class="pro-modal-body">
                 <p class="pro-intro">
-                    Мы готовим платный тариф <strong>HabitFlow Pro (299 ₽ / мес)</strong> для тех, кто хочет максимум аналитики и синхронизацию между устройствами.
+                    Запишите идею или функцию, которую хотите добавить следующей в свой HabitFlow:
                 </p>
                 <ul class="pro-features-list">
-                    <li>📈 <strong>Корреляционная аналитика:</strong> как загрузка по задачам влияет на срывы привычек.</li>
-                    <li>🗓️ <strong>Годовая тепловая карта (365 дней)</strong> и безлимитная история.</li>
-                    <li>📩 <strong>Персональные еженедельные отчёты</strong> в Telegram или на Email.</li>
-                    <li>☁️ <strong>Облачная синхронизация</strong> между ноутбуком и телефоном.</li>
+                    <li>📈 <strong>Корреляционная аналитика:</strong> как загрузка по задачам влияет на привычки.</li>
+                    <li>🗓️ <strong>Годовая тепловая карта (365 дней)</strong> и экспорт отчётов.</li>
+                    <li>📩 <strong>Уведомления в Telegram-бота</strong> о вечернем чек-ине.</li>
                 </ul>
                 <form id="proWaitlistForm" novalidate>
                     <div class="form-group">
-                        <label for="proContactInput">Ваш Telegram (@username) или Email *</label>
-                        <input type="text" id="proContactInput" class="form-input" placeholder="@username или name@example.com" required>
+                        <label for="proContactInput">Ваш контакт или тег заметки *</label>
+                        <input type="text" id="proContactInput" class="form-input" placeholder="@username или название идеи" required>
                     </div>
                     <div class="form-group">
-                        <label for="proFeatureSelect">Какая функция для вас самая ценная?</label>
+                        <label for="proFeatureSelect">Приоритетное направление</label>
                         <select id="proFeatureSelect" class="form-input">
                             <option value="Облачная синхронизация">Облачная синхронизация (телефон + ПК)</option>
                             <option value="Персональные отчёты в Telegram">Персональные отчёты и напоминания в Telegram</option>
@@ -398,8 +438,8 @@
                     </div>
                     <div class="form-error hidden" id="proFormError"></div>
                     <div class="modal-actions">
-                        <button type="button" class="btn btn-ghost" data-close-modals>Позже</button>
-                        <button type="submit" class="btn btn-pro">Получить скидку 50% на запуск</button>
+                        <button type="button" class="btn btn-ghost" data-close-modals>Закрыть</button>
+                        <button type="submit" class="btn btn-pro">Сохранить в БД</button>
                     </div>
                 </form>
             </div>

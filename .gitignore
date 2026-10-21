@@ -8,13 +8,19 @@ __pycache__/
 venv/
 env/
 
-# Databases
+# Databases & WAL files
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+*.backup
+backups/
 
-# Environment variables
+# Environment variables & secrets
 .env
+.env.*
+!.env.example
 
 # Testing & coverage
 .pytest_cache/

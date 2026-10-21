@@ -5,6 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.auth import require_owner_api
+from app.config import get_owner_today
 from app.database import get_db
 from app.schemas.stats import (
     AnalyticsSummaryResponse,
@@ -15,7 +17,11 @@ from app.schemas.stats import (
 )
 from app.services import stats_service
 
-router = APIRouter(prefix="/api/stats", tags=["Statistics & Dashboard"])
+router = APIRouter(
+    prefix="/api/stats",
+    tags=["Statistics & Dashboard"],
+    dependencies=[Depends(require_owner_api)],
+)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
@@ -33,7 +39,7 @@ def get_calendar(
     reference_date: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
 ) -> MonthlyCalendarResponse:
-    today = reference_date or date.today()
+    today = reference_date or get_owner_today()
     target_year = year or today.year
     target_month = month or today.month
     return stats_service.get_monthly_calendar(

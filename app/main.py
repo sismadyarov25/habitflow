@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.database import Base, engine
 import app.models  # noqa: F401 - ensure all models are registered on Base.metadata
-from app.routers import habits, pages, stats, tasks
+from app.routers import auth, habits, pages, stats, tasks
 
 settings = get_settings()
 
@@ -22,19 +22,34 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize SQLite tables on application startup."""
+    """Initialize database tables on application startup."""
     Base.metadata.create_all(bind=engine)
     yield
 
 
 app = FastAPI(
     title=settings.app_name,
-    description="MVP трекера привычек, ежедневного планировщика задач и аналитики личной продуктивности",
-    version="0.1.0",
+    description="Личный приватный трекер привычек, ежедневный планировщик задач и аналитика продуктивности",
+    version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Attach standard security headers to every HTTP response."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "same-origin"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -54,6 +69,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+app.include_router(auth.router)
 app.include_router(pages.router)
 app.include_router(habits.router)
 app.include_router(tasks.router)

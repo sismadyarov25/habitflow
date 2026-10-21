@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.auth import require_owner_api
 from app.database import get_db
 from app.schemas.habit import (
     HabitCheckInRequest,
@@ -16,7 +17,11 @@ from app.schemas.habit import (
 )
 from app.services import habit_service
 
-router = APIRouter(prefix="/api/habits", tags=["Habits"])
+router = APIRouter(
+    prefix="/api/habits",
+    tags=["Habits"],
+    dependencies=[Depends(require_owner_api)],
+)
 
 
 @router.get("", response_model=List[HabitWithStatsResponse])

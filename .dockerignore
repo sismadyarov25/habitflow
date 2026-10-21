@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+*.backup
+backups
+.env
+.pytest_cache
+.DS_Store

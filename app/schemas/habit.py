@@ -5,6 +5,8 @@ from datetime import date, datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.config import get_owner_today
+
 HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
@@ -67,7 +69,7 @@ class HabitUpdate(BaseModel):
 
 
 class HabitCheckInRequest(BaseModel):
-    completed_date: date = Field(default_factory=date.today)
+    completed_date: date = Field(default_factory=get_owner_today)
     note: Optional[str] = Field(default=None, max_length=255)
 
 

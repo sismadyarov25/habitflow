@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Вход владельца — {{ app_name }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="auth-body">
+    <main class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="brand-logo auth-logo">HF</div>
+                <h1 class="auth-title">{{ app_name }}</h1>
+                <p class="auth-subtitle">Личный приватный трекер привычек и задач. Доступ только для владельца.</p>
+            </div>
+
+            <form id="ownerLoginForm" class="auth-form" novalidate>
+                <div class="form-group">
+                    <label for="loginUsername">Логин владельца</label>
+                    <input
+                        type="text"
+                        id="loginUsername"
+                        name="username"
+                        class="form-input"
+                        value="{{ default_username }}"
+                        autocomplete="username"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="loginPassword">Пароль</label>
+                    <input
+                        type="password"
+                        id="loginPassword"
+                        name="password"
+                        class="form-input"
+                        placeholder="Введите ваш пароль"
+                        autocomplete="current-password"
+                        autofocus
+                        required
+                    >
+                </div>
+
+                <div id="loginErrorBox" class="form-error hidden" role="alert"></div>
+
+                <button type="submit" class="btn btn-primary btn-full btn-touch" id="loginSubmitBtn">
+                    🔒 Войти в личное пространство
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <span>Синхронизация между ноутбуком и телефоном через единую БД</span>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('ownerLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errorBox = document.getElementById('loginErrorBox');
+            const submitBtn = document.getElementById('loginSubmitBtn');
+            errorBox.classList.add('hidden');
+            errorBox.textContent = '';
+
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            if (!username || !password) {
+                errorBox.textContent = 'Введите логин и пароль владельца';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Проверка доступа...';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Ошибка входа');
+                }
+
+                window.location.href = '/';
+            } catch (err) {
+                errorBox.textContent = err.message;
+                errorBox.classList.remove('hidden');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🔒 Войти в личное пространство';
+            }
+        });
+    </script>
+</body>
+</html>

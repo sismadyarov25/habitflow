@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: habitflow-personal
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: OWNER_TIMEZONE
+        value: Asia/Almaty
+      - key: OWNER_USERNAME
+        value: owner
+      - key: OWNER_PASSWORD_HASH
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
